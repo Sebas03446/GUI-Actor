@@ -77,6 +77,8 @@ class TrainingArguments(transformers.TrainingArguments):
     pointer_loss_weight: float = field(default=0.1)
     lm_loss_weight: float = field(default=-1.0)
 
+    write_loss_weight: float = field(default=0.1)  # new loss weight
+
 
 # def mask_embedding_grad(grad):
 #     n_new_tokens = len(ADDITIONAL_SPECIAL_TOKENS)
@@ -184,6 +186,7 @@ class DataCollatorForSupervisedDataset:
         return input_ids
 
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
+        print("__call__ data collator called")
         input_ids, labels = tuple([instance[key] for instance in instances] for key in ("input_ids", "labels"))
         input_ids = [_input_ids[: self.tokenizer.model_max_length] for _input_ids in input_ids]
         labels = [_labels[: self.tokenizer.model_max_length] for _labels in labels]
@@ -195,6 +198,7 @@ class DataCollatorForSupervisedDataset:
             "input_ids": input_ids,
             "labels": labels.long() if labels.dtype == torch.int32 else labels,
             "attention_mask": input_ids.ne(self.tokenizer.pad_token_id),
+            "action_types": [instance.get("action_type") for instance in instances],
         }
 
         if "pixel_values" in instances[0]:
@@ -230,6 +234,7 @@ def make_supervised_data_module(
 def train():
     global local_rank
 
+    print("Starting training...")
     parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     local_rank = training_args.local_rank
@@ -263,7 +268,9 @@ def train():
         raise ValueError(f"Invalid model type: {model_args.model_type}")
     model.config.use_cache = False
     model.reset_loss_weights(
-        pointer_loss_weight=training_args.pointer_loss_weight, lm_loss_weight=training_args.lm_loss_weight
+        pointer_loss_weight=training_args.pointer_loss_weight,
+        lm_loss_weight=training_args.lm_loss_weight,
+        write_loss_weight=training_args.write_loss_weight,
     )
 
     if training_args.gradient_checkpointing:
@@ -309,6 +316,8 @@ def train():
     data_module = make_supervised_data_module(
         tokenizer=tokenizer, processor=data_args.processor, data_args=data_args, training_args=training_args
     )
+
+    print("Data module created.")
 
     trainer = AGUVISTrainer(
         model=model,

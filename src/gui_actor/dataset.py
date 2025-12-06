@@ -35,6 +35,7 @@ def reformat_coordinates(text):
     (3) Return the new text and the coordinates as a list of (x, y), where x in [0, 1] and y in [0, 1].
     """
     epsilon = 0.001
+
     def adjust_coord(c):
         """
         Adjust coordinate if it is too close to 0 or 1.
@@ -54,12 +55,8 @@ def reformat_coordinates(text):
             target_text = f"{DEFAULT_POINTER_START_TOKEN}{DEFAULT_POINTER_PAD_TOKEN}{DEFAULT_POINTER_END_TOKEN}"
         else:
             target_text = f"{DEFAULT_POINTER_START_TOKEN}{DEFAULT_POINTER_PAD_TOKEN}{DEFAULT_POINTER_END_TOKEN}, {DEFAULT_POINTER_START_TOKEN}{DEFAULT_POINTER_PAD_TOKEN}{DEFAULT_POINTER_END_TOKEN}"
-        text = re.sub(
-            pattern,
-            target_text,
-            text
-        )
-    
+        text = re.sub(pattern, target_text, text)
+
     coordinates = []
     all_matches.sort(key=lambda x: x[0])
     # Extract coordinates in order
@@ -79,8 +76,9 @@ def reformat_coordinates(text):
             y2 = adjust_coord(ast.literal_eval(y2_str))
             coordinates.append((x1, y1))
             coordinates.append((x2, y2))
-    
+
     return text, coordinates
+
 
 def get_token_index(image_processor, image, point_x, point_y):
     """
@@ -93,7 +91,7 @@ def get_token_index(image_processor, image, point_x, point_y):
     """
     if len(image) != 1:
         raise ValueError(f"Expected 1 image, got {len(image)}")
-    
+
     # get the original image size and the resized image size
     image = image[0]
     w, h = image.size
@@ -103,11 +101,12 @@ def get_token_index(image_processor, image, point_x, point_y):
     merge_patch_size = image_processor.patch_size * image_processor.merge_size
     x_index = math.floor(px / merge_patch_size)
     y_index = math.floor(py / merge_patch_size)
-    
+
     visual_token_index = y_index * (w // merge_patch_size) + x_index
 
     # merge all above print into one line
     return visual_token_index
+
 
 def get_multi_patch_labels(image_processor, image, bbox_gt):
     """
@@ -124,7 +123,7 @@ def get_multi_patch_labels(image_processor, image, bbox_gt):
     image = image[0]
     w, h = image.size
 
-    bbox_gt = [bbox_gt[0]*w, bbox_gt[1]*h, bbox_gt[2]*w, bbox_gt[3]*h]
+    bbox_gt = [bbox_gt[0] * w, bbox_gt[1] * h, bbox_gt[2] * w, bbox_gt[3] * h]
     # Extract bounding box coordinates
     x_min, y_min, x_max, y_max = bbox_gt
     x_min = max(0, x_min)
@@ -133,7 +132,9 @@ def get_multi_patch_labels(image_processor, image, bbox_gt):
     y_max = min(h, y_max)
 
     merge_patch_size = image_processor.patch_size * image_processor.merge_size
-    assert w % merge_patch_size == 0 and h % merge_patch_size == 0, f"Image size {w}x{h} is not divisible by merge_patch_size {merge_patch_size}"
+    assert w % merge_patch_size == 0 and h % merge_patch_size == 0, (
+        f"Image size {w}x{h} is not divisible by merge_patch_size {merge_patch_size}"
+    )
     grid_h, grid_w = h // merge_patch_size, w // merge_patch_size
 
     binary_mask = torch.zeros(grid_h * grid_w)
@@ -145,15 +146,15 @@ def get_multi_patch_labels(image_processor, image, bbox_gt):
             patch_y_min = y_idx * merge_patch_size
             patch_x_max = patch_x_min + merge_patch_size
             patch_y_max = patch_y_min + merge_patch_size
-            
+
             # Check if patch overlaps with the bounding box
-            if not (patch_x_max <= x_min or patch_x_min >= x_max or 
-                    patch_y_max <= y_min or patch_y_min >= y_max):
+            if not (patch_x_max <= x_min or patch_x_min >= x_max or patch_y_max <= y_min or patch_y_min >= y_max):
                 # Calculate patch index in the flattened grid
                 patch_idx = y_idx * grid_w + x_idx
                 binary_mask[patch_idx] = 1
 
     return binary_mask
+
 
 def token_index_to_coordinates(image_processor, visual_token_index, image_width, image_height):
     merge_patch_size = image_processor.patch_size * image_processor.merge_size
@@ -162,6 +163,7 @@ def token_index_to_coordinates(image_processor, visual_token_index, image_width,
     px = x_index * merge_patch_size + merge_patch_size / 2
     py = y_index * merge_patch_size + merge_patch_size / 2
     return px, py
+
 
 class LazySupervisedDataset(Dataset):
     def __init__(
@@ -337,28 +339,30 @@ class LazySupervisedDataset(Dataset):
                 "visual_token_indices_of_coordinates": data_dict["visual_token_indices_of_coordinates"][0],
                 "pixel_values": data_dict["pixel_values"],
                 "image_grid_thw": data_dict["image_grid_thw"],
-                "multi_patch_labels": data_dict["multi_patch_labels"][0],   # add multi_patch_labels                
+                "multi_patch_labels": data_dict["multi_patch_labels"][0],  # add multi_patch_labels
             }
 
         data_dict["id"] = item_id
 
         # return None if the input_ids is longer than the model_max_length
         n_image_tokens = (
-            data_dict["image_grid_thw"][0][0] * 
-            data_dict["image_grid_thw"][0][1] * 
-            data_dict["image_grid_thw"][0][2] / 
-            self.processor.image_processor.merge_size / 
-            self.processor.image_processor.merge_size
+            data_dict["image_grid_thw"][0][0]
+            * data_dict["image_grid_thw"][0][1]
+            * data_dict["image_grid_thw"][0][2]
+            / self.processor.image_processor.merge_size
+            / self.processor.image_processor.merge_size
         )
         if (len(data_dict["input_ids"]) + n_image_tokens) > self.tokenizer.model_max_length:
-            rank0_print(f"=== Removed data_dict {i} because it is longer than the model_max_length: {len(data_dict['input_ids'])} + {n_image_tokens} > {self.tokenizer.model_max_length}")
+            rank0_print(
+                f"=== Removed data_dict {i} because it is longer than the model_max_length: {len(data_dict['input_ids'])} + {n_image_tokens} > {self.tokenizer.model_max_length}"
+            )
             return None
 
         return data_dict
 
     def preprocess_qwen2vl(
         self,
-        source, # conversations
+        source,  # conversations
         tokenizer: transformers.PreTrainedTokenizer,
         processor: transformers.ProcessorMixin,
         image: list,
@@ -380,14 +384,16 @@ class LazySupervisedDataset(Dataset):
         coordinates = []
         visual_token_indices_of_coordinates = []
         multi_patch_labels = []
-        
+
+        action_type = None  # write model
+
         image_list = []
         image_index = 0
 
         ## prepare the system message
         if roles[source[0]["from"]] == "system":
             system_message = source[0]["value"]
-            source = source[1:self.data_args.max_conv_turns]
+            source = source[1 : self.data_args.max_conv_turns]
         # else: use the constant system message
         system_input_id = tokenizer.apply_chat_template(
             conversation=[{"role": "system", "content": [{"type": "text", "text": system_message}]}],
@@ -414,20 +420,22 @@ class LazySupervisedDataset(Dataset):
                 # include image information regarding to current conversation turn
                 image_placeholders = []
                 for _ in range(image_count):
-                    image_placeholders.append({
-                        "type": "image",
-                        "image": image[image_index],
-                        "min_pixels": self.processor.image_processor.min_pixels,
-                        "max_pixels": self.processor.image_processor.max_pixels,
-                    })
+                    image_placeholders.append(
+                        {
+                            "type": "image",
+                            "image": image[image_index],
+                            "min_pixels": self.processor.image_processor.min_pixels,
+                            "max_pixels": self.processor.image_processor.max_pixels,
+                        }
+                    )
                     image_index += 1
 
                 content = content.replace(DEFAULT_IMAGE_TOKEN, "")
                 conv = {"role": role, "content": image_placeholders + [{"type": "text", "text": content}]}
 
-                image_inputs, _ = process_vision_info([conv]) # list of PIL.Image.Image
+                image_inputs, _ = process_vision_info([conv])  # list of PIL.Image.Image
                 image_list.extend(image_inputs)
-                
+
                 templated_conv = tokenizer.apply_chat_template(
                     conversation=[conv], chat_template=chat_template, tokenize=False
                 )
@@ -443,6 +451,11 @@ class LazySupervisedDataset(Dataset):
                 if role in ["user", "system"]:
                     conv = {"role": role, "content": [{"type": "text", "text": content}]}
                 else:  # assistant
+                    if "pyautogui.click(" in content:  # write model add action type
+                        action_type = "click"
+                    elif "pyautogui.write(" in content:
+                        action_type = "write"
+
                     conv = {
                         "role": role,
                         "content": [{"type": "text", "text": content}],
@@ -453,36 +466,33 @@ class LazySupervisedDataset(Dataset):
                     if conv["recipient"] == "os":
                         if len(image_inputs) == 0:
                             raise ValueError("No image found for visual grounding")
-                        # replace the coordinates with the special tokens
-                        text, coord = reformat_coordinates(conv["content"][0]["text"])
-                        conv["content"][0]["text"] = text
-                        # rank0_print(f"coord: {coord}")
 
-                        # get the visual token indices of the coordinates
-                        coordinates.extend(coord)
-                        for (point_x, point_y) in coord:
-                            visual_token_index = get_token_index(
-                                processor.image_processor,
-                                image_list,
-                                point_x,
-                                point_y
-                            )
-                            # px, py = token_index_to_coordinates(
-                            #     processor.image_processor,
-                            #     visual_token_index,
-                            #     image_list[0].size[0], # make sure the size here is after qwen2vl processing
-                            #     image_list[0].size[1]
-                            # )
-                            # rank0_print(f"estimated px: {px}, py: {py}")
-                            visual_token_indices_of_coordinates.append(visual_token_index)
+                        if action_type == "click":
+                            # replace the coordinates with the special tokens
+                            text, coord = reformat_coordinates(conv["content"][0]["text"])
+                            conv["content"][0]["text"] = text
+                            # rank0_print(f"coord: {coord}")
 
-                            if conv["bbox_gt"] is not None:
-                                patch_mask = get_multi_patch_labels(
-                                    processor.image_processor,
-                                    image_list,
-                                    conv["bbox_gt"]
-                                )  
-                                multi_patch_labels.append(patch_mask)
+                            # get the visual token indices of the coordinates
+                            coordinates.extend(coord)
+                            for point_x, point_y in coord:
+                                visual_token_index = get_token_index(
+                                    processor.image_processor, image_list, point_x, point_y
+                                )
+                                # px, py = token_index_to_coordinates(
+                                #     processor.image_processor,
+                                #     visual_token_index,
+                                #     image_list[0].size[0], # make sure the size here is after qwen2vl processing
+                                #     image_list[0].size[1]
+                                # )
+                                # rank0_print(f"estimated px: {px}, py: {py}")
+                                visual_token_indices_of_coordinates.append(visual_token_index)
+
+                                if conv["bbox_gt"] is not None:
+                                    patch_mask = get_multi_patch_labels(
+                                        processor.image_processor, image_list, conv["bbox_gt"]
+                                    )
+                                    multi_patch_labels.append(patch_mask)
 
                 templated_conv = tokenizer.apply_chat_template(
                     conversation=[conv],
@@ -506,7 +516,11 @@ class LazySupervisedDataset(Dataset):
 
         input_ids = torch.tensor([input_id], dtype=torch.long)
         targets = torch.tensor([target], dtype=torch.long)
-        visual_token_indices_of_coordinates = torch.tensor([visual_token_indices_of_coordinates], dtype=torch.long) if len(visual_token_indices_of_coordinates) > 0 else [None]
+        visual_token_indices_of_coordinates = (
+            torch.tensor([visual_token_indices_of_coordinates], dtype=torch.long)
+            if len(visual_token_indices_of_coordinates) > 0
+            else [None]
+        )
         coordinates = [coordinates] if len(coordinates) > 0 else [None]
 
         # process multi_patch_labels
@@ -518,16 +532,17 @@ class LazySupervisedDataset(Dataset):
         data_dict = {
             "input_ids": input_ids,  # tensor(bs x seq_len)
             "labels": targets,  # tensor(bs x seq_len)
+            "action_type": action_type,
         }
 
         if pixel_values is not None:
             data_dict["pixel_values"] = pixel_values
             data_dict["image_grid_thw"] = image_grid_thw
-        
+
         # if len(coordinates[0]) != len(visual_token_indices_of_coordinates[0]):
         #     raise ValueError(f"The number of coordinates ({len(coordinates[0])}) does not match the number of image token indices ({len(visual_token_indices_of_coordinates[0])})")
         data_dict["coordinates"] = coordinates
         data_dict["visual_token_indices_of_coordinates"] = visual_token_indices_of_coordinates
         data_dict["multi_patch_labels"] = multi_patch_labels
-        
+
         return data_dict
