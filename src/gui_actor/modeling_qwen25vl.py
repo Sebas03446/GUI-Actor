@@ -308,7 +308,7 @@ class Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditionalGene
         # If vision supervision is requested, process the action head.
         pointer_loss = None
         pointer_scores = []
-        if visual_token_indices_of_coordinates is not None and action_types is not None:
+        if visual_token_indices_of_coordinates is not None and len(visual_token_indices_of_coordinates) > 0:
             batch_size = input_ids.shape[0]
             pointer_losses = []
 
