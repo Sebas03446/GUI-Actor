@@ -395,7 +395,7 @@ class Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditionalGene
         # add write_loss
         print("lm_loss:", lm_loss, "pointer_loss:", pointer_loss, "write_loss:", write_loss)
         if lm_loss is None and pointer_loss is None and write_loss is None:
-            total_loss = None
+            total_loss = torch.tensor(0.0, device=hidden_states.device, dtype=hidden_states.dtype, requires_grad=True)
         elif lm_loss is None:
             total_loss = pointer_loss if pointer_loss is not None else write_loss
         elif pointer_loss is None and write_loss is None:
