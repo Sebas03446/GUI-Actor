@@ -251,6 +251,7 @@ def train():
             low_cpu_mem_usage=False,
         )
     elif model_args.model_type == "qwen25vl":
+        print(model_args.model_name_or_path)
         model = Qwen2_5_VLForConditionalGenerationWithPointer.from_pretrained(
             model_args.model_name_or_path,
             cache_dir=training_args.cache_dir,
