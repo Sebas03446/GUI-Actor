@@ -1,6 +1,6 @@
 datasets:
-  - json_path: /mnt/model-weights-vol/qianhuiwu/GUI-Actor-Data/form_dataset.json
-    images_folder: /mnt/model-weights-vol/qianhuiwu/GUI-Actor-Data/form_imgs
+  - json_path: /mnt/model-weights-vol/qianhuiwu/GUI-Actor-Data/form_dataset_2.json
+    images_folder: /mnt/model-weights-vol/qianhuiwu/GUI-Actor-Data/form_imgs_2
     sampling_strategy: "all"
 #  - json_path: /mnt/datasets/Uground/uground_aguvis_bbox_filter.json
 #   images_folder: /mnt/datasets/Uground/images/
