@@ -332,6 +332,8 @@ class LazySupervisedDataset(Dataset):
 
         data_dict = self.preprocess_qwen2vl(sources, self.tokenizer, self.processor, image_list, id=item_id)
         if isinstance(i, int):
+            if "action_types" in data_dict:
+                rank0_print(f"Sample {i}: action_types = {data_dict['action_types']}")
             data_dict = {
                 "input_ids": data_dict["input_ids"][0],
                 "labels": data_dict["labels"][0],
@@ -340,6 +342,7 @@ class LazySupervisedDataset(Dataset):
                 "pixel_values": data_dict["pixel_values"],
                 "image_grid_thw": data_dict["image_grid_thw"],
                 "multi_patch_labels": data_dict["multi_patch_labels"][0],  # add multi_patch_labels
+                "action_types": data_dict["action_types"],
             }
 
         data_dict["id"] = item_id
@@ -385,7 +388,7 @@ class LazySupervisedDataset(Dataset):
         visual_token_indices_of_coordinates = []
         multi_patch_labels = []
 
-        action_type = None  # write model
+        action_types = []  # write model
 
         image_list = []
         image_index = 0
@@ -451,11 +454,13 @@ class LazySupervisedDataset(Dataset):
                 if role in ["user", "system"]:
                     conv = {"role": role, "content": [{"type": "text", "text": content}]}
                 else:  # assistant
+                    current_action_type = None
                     if "pyautogui.click(" in content:  # write model add action type
-                        action_type = "click"
+                        current_action_type = "click"
                     elif "pyautogui.write(" in content:
-                        action_type = "write"
+                        current_action_type = "write"
 
+                    action_types.append(current_action_type)
                     conv = {
                         "role": role,
                         "content": [{"type": "text", "text": content}],
@@ -467,7 +472,7 @@ class LazySupervisedDataset(Dataset):
                         if len(image_inputs) == 0:
                             raise ValueError("No image found for visual grounding")
 
-                        if action_type == "click":
+                        if current_action_type == "click":
                             # replace the coordinates with the special tokens
                             text, coord = reformat_coordinates(conv["content"][0]["text"])
                             conv["content"][0]["text"] = text
@@ -532,7 +537,7 @@ class LazySupervisedDataset(Dataset):
         data_dict = {
             "input_ids": input_ids,  # tensor(bs x seq_len)
             "labels": targets,  # tensor(bs x seq_len)
-            "action_type": action_type,
+            "action_types": action_types,
         }
 
         if pixel_values is not None:

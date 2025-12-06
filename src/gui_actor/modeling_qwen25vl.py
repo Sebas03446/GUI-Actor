@@ -260,21 +260,35 @@ class Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditionalGene
         print("action_types:", action_types)
         write_loss = None
         if labels is not None and self.write_loss_weight > 0 and action_types is not None:
-            # Only compute write loss for write actions
-            write_mask = torch.tensor([t == "write" for t in action_types], device=labels.device)
-            if write_mask.any():
-                write_logits = self.write_head(hidden_states)
-                shift_write_logits = write_logits[..., :-1, :].contiguous()
-                shift_labels = labels[..., 1:].contiguous()
+            write_logits = self.write_head(hidden_states)  # [batch, seq_len, vocab_size]
 
-                loss_fct = nn.CrossEntropyLoss(reduction="none")
-                shift_write_logits = shift_write_logits.view(-1, self.config.vocab_size)
-                shift_labels = shift_labels.view(-1)
-                shift_labels = shift_labels.to(shift_write_logits.device)
+            shift_write_logits = write_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
 
-                losses = loss_fct(shift_write_logits, shift_labels)
-                losses = losses.view(labels.shape[0], -1)
-                write_loss = losses[write_mask].mean()
+            loss_fct = nn.CrossEntropyLoss(reduction="none")
+            shift_write_logits_flat = shift_write_logits.view(-1, self.config.vocab_size)
+            shift_labels_flat = shift_labels.view(-1)
+            shift_labels_flat = shift_labels_flat.to(shift_write_logits_flat.device)
+
+            token_losses = loss_fct(shift_write_logits_flat, shift_labels_flat)
+
+            # Mask: only supervise on write action turns, not IGNORE_INDEX
+            valid_mask = shift_labels_flat != IGNORE_INDEX
+
+            # Additionally, create a per-batch mask for write actions
+            batch_write_mask = torch.tensor([t == "write" for t in action_types], device=labels.device)
+
+            # Expand batch mask to sequence length
+            seq_len = shift_labels.shape[1]
+            batch_write_mask_expanded = batch_write_mask.unsqueeze(1).expand(-1, seq_len).reshape(-1)
+
+            # Combine masks: only compute loss on write turns that aren't IGNORE_INDEX
+            combined_mask = valid_mask & batch_write_mask_expanded
+
+            if combined_mask.sum() > 0:
+                write_loss = token_losses[combined_mask].mean()
+            else:
+                write_loss = None
 
         lm_loss = None
         if labels is not None and self.lm_loss_weight > 0:
@@ -294,12 +308,15 @@ class Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditionalGene
         # If vision supervision is requested, process the action head.
         pointer_loss = None
         pointer_scores = []
-        if visual_token_indices_of_coordinates is not None:
+        if visual_token_indices_of_coordinates is not None and action_types is not None:
             batch_size = input_ids.shape[0]
             pointer_losses = []
 
             # Process each sample individually because the number of visual and target tokens may vary.
             for i in range(batch_size):
+                if action_types[i] != "click":
+                    pointer_losses.append(torch.tensor(0.0).to(hidden_states.device))
+                    continue  # Skip non-click actions
                 dummy_target = False
 
                 # Get the token ids and corresponding hidden states for sample i.
@@ -376,15 +393,19 @@ class Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditionalGene
 
         # Combine the LM loss and vision loss using the provided loss weights.
         # add write_loss
+        print("lm_loss:", lm_loss, "pointer_loss:", pointer_loss, "write_loss:", write_loss)
         if lm_loss is None:
-            total_loss = pointer_loss
-        elif pointer_loss is None:
+            total_loss = pointer_loss if pointer_loss is not None else write_loss
+        elif pointer_loss is None and write_loss is None:
             total_loss = lm_loss
-        elif write_loss is not None:
-            total_loss = self.lm_loss_weight * lm_loss + self.pointer_loss_weight * (
-                pointer_loss if pointer_loss is not None else 0.0
-            )
+        elif pointer_loss is not None and write_loss is None:
+            # CLICK action batch
+            total_loss = self.lm_loss_weight * lm_loss + self.pointer_loss_weight * pointer_loss
+        elif write_loss is not None and pointer_loss is None:
+            # WRITE action batch
+            total_loss = self.lm_loss_weight * lm_loss + self.write_loss_weight * write_loss
         else:
+            # Mixed batch (some clicks, some writes)
             total_loss = (
                 self.lm_loss_weight * lm_loss
                 + self.pointer_loss_weight * pointer_loss

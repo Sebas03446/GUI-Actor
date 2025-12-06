@@ -198,8 +198,10 @@ class DataCollatorForSupervisedDataset:
             "input_ids": input_ids,
             "labels": labels.long() if labels.dtype == torch.int32 else labels,
             "attention_mask": input_ids.ne(self.tokenizer.pad_token_id),
-            "action_types": [instance.get("action_type") for instance in instances],
+            "action_types": [instance.get("action_types") for instance in instances],
         }
+
+        rank0_print(f"Collator: action_types = {batch['action_types']}")
 
         if "pixel_values" in instances[0]:
             batch["pixel_values"] = torch.concat([instance["pixel_values"] for instance in instances], dim=0)
