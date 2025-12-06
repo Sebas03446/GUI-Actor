@@ -155,6 +155,7 @@ class Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditionalGene
         ] = None,  # shape: list [(n_target, n_visual), ...]; binary mask of patches in bbox
         if_multi_patch: bool = True,
         coordinates: Optional[List[Tuple[float, float]]] = None,
+        action_types: Optional[List[str]] = None,  # new parameter for write model
         verbose: bool = False,
     ) -> Union[Tuple, QwenVLwithVisionHeadOutputWithPast]:
         print("In Qwen2_5_VLForConditionalGenerationWithPointer forward()")
@@ -256,6 +257,7 @@ class Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditionalGene
 
         print("logits shape:", logits.shape)
         print("labels:", labels)
+        print("action_types:", action_types)
         write_loss = None
         if labels is not None and self.write_loss_weight > 0 and action_types is not None:
             # Only compute write loss for write actions
