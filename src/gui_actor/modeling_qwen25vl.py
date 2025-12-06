@@ -394,7 +394,9 @@ class Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditionalGene
         # Combine the LM loss and vision loss using the provided loss weights.
         # add write_loss
         print("lm_loss:", lm_loss, "pointer_loss:", pointer_loss, "write_loss:", write_loss)
-        if lm_loss is None:
+        if lm_loss is None and pointer_loss is None and write_loss is None:
+            total_loss = None
+        elif lm_loss is None:
             total_loss = pointer_loss if pointer_loss is not None else write_loss
         elif pointer_loss is None and write_loss is None:
             total_loss = lm_loss
@@ -411,6 +413,9 @@ class Qwen2_5_VLForConditionalGenerationWithPointer(Qwen2_5_VLForConditionalGene
                 + self.pointer_loss_weight * pointer_loss
                 + self.write_loss_weight * write_loss
             )
+
+        if total_loss is None or (isinstance(total_loss, torch.Tensor) and total_loss.item() == 0.0):
+            rank0_print(f"WARNING: total_loss is None or 0! lm={lm_loss}, ptr={pointer_loss}, write={write_loss}")
 
         if return_dict:
             return QwenVLwithVisionHeadOutputWithPast(
