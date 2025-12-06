@@ -4,9 +4,9 @@ datasets:
 #   sampling_strategy: "all"
 # - json_path: /mnt/datasets/GUIEnv/guienv_aguvis_bbox.json
 #   images_folder: /mnt/datasets/GUIEnv/guienvs/images/
-#   sampling_strategy: "all"
-  - json_path: /mnt/model-weights-vol/qianhuiwu/GUI-Actor-Data/guiact_aguvis_bbox.json
-    images_folder: /mnt/model-weights-vol/qianhuiwu/GUI-Actor-Data/GUIAct/web_imgs/
+#   sampling_strategy: "all" 
+  - json_path: /mnt/model-weights-vol/qianhuiwu/GUI-Actor-Data/guiact_bbox.json 
+    images_folder: /mnt/model-weights-vol/qianhuiwu/GUI-Actor-Data/GUIAct_images/GUIAct/web_imgs
     sampling_strategy: "all"
 # - json_path: /mnt/datasets/AMEX/amex_aguvis_bbox.json
 #   images_folder: /mnt/datasets/AMEX/screenshots/
