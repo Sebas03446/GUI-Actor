@@ -42,14 +42,17 @@ class ModelArguments:
     flash_attn_2_enabled: bool = field(default=True)
     model_type: str = field(default="qwen2vl", metadata={"help": "model type: qwen2vl or qwen25vl"})
 
+
 @dataclass
 class DataArguments:
     data_path: str = field(default=None)
     early_mix_text: bool = False
     image_folder: Optional[str] = field(default=None)
-    min_pixels: Optional[int] = field(default=3136) # 2 * 2 * 28 * 28 = 56 * 56
-    max_pixels: Optional[int] = field(default=5720064) # 5720064 = 114 * 64 * 28 * 28 = 3192 * 1792, 12845056 = 128 * 128 * 28 * 28
-    max_conv_turns: Optional[int] = field(default=10) # 30 => 20 => 10
+    min_pixels: Optional[int] = field(default=3136)  # 2 * 2 * 28 * 28 = 56 * 56
+    max_pixels: Optional[int] = field(
+        default=5720064
+    )  # 5720064 = 114 * 64 * 28 * 28 = 3192 * 1792, 12845056 = 128 * 128 * 28 * 28
+    max_conv_turns: Optional[int] = field(default=10)  # 30 => 20 => 10
 
 
 @dataclass
@@ -63,7 +66,7 @@ class TrainingArguments(transformers.TrainingArguments):
     group_by_modality_length: bool = field(default=False)
     gradient_checkpointing: bool = field(default=True)
     verbose_logging: bool = field(default=False)
-    
+
     unfreeze_all_parameters: bool = field(default=False)
     unfreeze_pointer_head: bool = field(default=True)
     unfreeze_lm_head: bool = field(default=False)
@@ -74,11 +77,13 @@ class TrainingArguments(transformers.TrainingArguments):
     pointer_loss_weight: float = field(default=0.1)
     lm_loss_weight: float = field(default=-1.0)
 
+
 # def mask_embedding_grad(grad):
 #     n_new_tokens = len(ADDITIONAL_SPECIAL_TOKENS)
 #     mask = torch.zeros_like(grad)
 #     mask[-n_new_tokens:] = 1.0
 #     return grad * mask
+
 
 def smart_tokenizer_and_embedding_resize(
     special_tokens_dict: Dict,
@@ -92,7 +97,7 @@ def smart_tokenizer_and_embedding_resize(
     num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
     model.resize_token_embeddings(len(tokenizer))
 
-    new_vocab_size = len(tokenizer)    
+    new_vocab_size = len(tokenizer)
     # Update base model and current model config
     if hasattr(model.config, "text_config"):
         model.config.text_config.vocab_size = new_vocab_size
@@ -115,7 +120,10 @@ def update_pointer_token_ids(model_config: transformers.PretrainedConfig, tokeni
     model_config.pointer_start_token_id = tokenizer.encode(DEFAULT_POINTER_START_TOKEN)[0]
     model_config.pointer_end_token_id = tokenizer.encode(DEFAULT_POINTER_END_TOKEN)[0]
     model_config.pointer_pad_token_id = tokenizer.encode(DEFAULT_POINTER_PAD_TOKEN)[0]
-    rank0_print(f"Updated pointer token ids: {model_config.pointer_pad_token_id}, {model_config.pointer_start_token_id}, {model_config.pointer_end_token_id}")
+    rank0_print(
+        f"Updated pointer token ids: {model_config.pointer_pad_token_id}, {model_config.pointer_start_token_id}, {model_config.pointer_end_token_id}"
+    )
+
 
 def setup_params_to_update(model: transformers.PreTrainedModel, training_args: TrainingArguments):
     if training_args.unfreeze_all_parameters:
@@ -138,15 +146,15 @@ def setup_params_to_update(model: transformers.PreTrainedModel, training_args: T
             rank0_print(f"Unfreezing lm head parameters...")
             for p in model.lm_head.parameters():
                 p.requires_grad = True
-        
-        if training_args.unfreeze_base_model: # including text tokens
+
+        if training_args.unfreeze_base_model:  # including text tokens
             rank0_print(f"Unfreezing base model parameters...")
             for p in model.model.parameters():
                 p.requires_grad = True
 
         if training_args.unfreeze_last_n_layers > 0:
             rank0_print(f"Unfreezing last {training_args.unfreeze_last_n_layers} layers of base model parameters...")
-            for p in model.model.layers[-training_args.unfreeze_last_n_layers:].parameters():
+            for p in model.model.layers[-training_args.unfreeze_last_n_layers :].parameters():
                 p.requires_grad = True
 
         if training_args.unfreeze_new_tokens:
@@ -154,11 +162,12 @@ def setup_params_to_update(model: transformers.PreTrainedModel, training_args: T
             model.model.embed_tokens.weight.requires_grad = True
             # Registering hook before Trainer initialization is invalid, so it is disabled
             # model.model.embed_tokens.weight.register_hook(mask_embedding_grad)
-        
+
         if training_args.unfreeze_visual:
             rank0_print(f"Unfreezing visual parameters...")
             for p in model.visual.parameters():
                 p.requires_grad = True
+
 
 @dataclass
 class DataCollatorForSupervisedDataset:
@@ -194,7 +203,9 @@ class DataCollatorForSupervisedDataset:
 
         if "coordinates" in instances[0]:
             batch["coordinates"] = [instance["coordinates"] for instance in instances]
-            batch["visual_token_indices_of_coordinates"] = [instance["visual_token_indices_of_coordinates"] for instance in instances]
+            batch["visual_token_indices_of_coordinates"] = [
+                instance["visual_token_indices_of_coordinates"] for instance in instances
+            ]
 
         if "multi_patch_labels" in instances[0]:
             batch["multi_patch_labels"] = [instance["multi_patch_labels"] for instance in instances]
@@ -202,10 +213,12 @@ class DataCollatorForSupervisedDataset:
         return batch
 
 
-def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
-                                processor: transformers.ProcessorMixin,
-                                data_args: DataArguments,
-                                training_args: TrainingArguments) -> Dict:
+def make_supervised_data_module(
+    tokenizer: transformers.PreTrainedTokenizer,
+    processor: transformers.ProcessorMixin,
+    data_args: DataArguments,
+    training_args: TrainingArguments,
+) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
     train_dataset = LazySupervisedDataset(
         tokenizer=tokenizer, processor=processor, data_path=data_args.data_path, data_args=data_args
@@ -248,14 +261,18 @@ def train():
     else:
         raise ValueError(f"Invalid model type: {model_args.model_type}")
     model.config.use_cache = False
-    model.reset_loss_weights(pointer_loss_weight=training_args.pointer_loss_weight, lm_loss_weight=training_args.lm_loss_weight)
+    model.reset_loss_weights(
+        pointer_loss_weight=training_args.pointer_loss_weight, lm_loss_weight=training_args.lm_loss_weight
+    )
 
     if training_args.gradient_checkpointing:
         if hasattr(model, "enable_input_require_grads"):
             model.enable_input_require_grads()
         else:
+
             def make_inputs_require_grad(module, input, output):
                 output.requires_grad_(True)
+
             model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
 
     setup_params_to_update(model, training_args)
@@ -282,11 +299,15 @@ def train():
 
     if not os.path.exists(training_args.output_dir):
         os.makedirs(training_args.output_dir, exist_ok=True)
-    
-    if training_args.local_rank == 0 or training_args.local_rank == -1:
-        dump_args_to_json(model.config, data_args.processor, model_args, data_args, training_args, training_args.output_dir)
 
-    data_module = make_supervised_data_module(tokenizer=tokenizer, processor=data_args.processor, data_args=data_args, training_args=training_args)
+    if training_args.local_rank == 0 or training_args.local_rank == -1:
+        dump_args_to_json(
+            model.config, data_args.processor, model_args, data_args, training_args, training_args.output_dir
+        )
+
+    data_module = make_supervised_data_module(
+        tokenizer=tokenizer, processor=data_args.processor, data_args=data_args, training_args=training_args
+    )
 
     trainer = AGUVISTrainer(
         model=model,
@@ -300,14 +321,17 @@ def train():
         emb_param = None
         for n, p in trainer.model.named_parameters():
             if n.endswith("model.embed_tokens.weight"):
-                emb_param = p; break
+                emb_param = p
+                break
         if emb_param is None:
             raise ValueError("embed_tokens.weight not found")
 
         n_new_tokens = len(ADDITIONAL_SPECIAL_TOKENS)
+
         def mask_grad(grad):
             grad[:-n_new_tokens] = 0.0
             return grad
+
         emb_param.register_hook(mask_grad)
 
     if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):

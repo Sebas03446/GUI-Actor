@@ -1,8 +1,8 @@
 #!/bin/bash
 # model_type: qwen2vl or qwen25vl
 model_type="qwen25vl"
-llm_model="Qwen/Qwen2.5-VL-3B-Instruct"
-output_dir="./checkpoints/${model_type}_warmup"
+llm_model="/mnt/model-weights-vol/qianhuiwu/GUI-Actor-3B-Qwen2.5-VL-LiteTrain"
+output_dir="/mnt/model-weights-vol/qianhuiwu/${model_type}_warmup"
 
 # === Training Command ===
 torchrun --nproc_per_node=4 train.py \
