@@ -460,6 +460,7 @@ class LazySupervisedDataset(Dataset):
                     elif "pyautogui.write(" in content:
                         current_action_type = "write"
 
+                    rank0_print(f"DEBUG: Detected action type: {current_action_type}")
                     action_types.append(current_action_type)
                     conv = {
                         "role": role,
@@ -498,6 +499,8 @@ class LazySupervisedDataset(Dataset):
                                         processor.image_processor, image_list, conv["bbox_gt"]
                                     )
                                     multi_patch_labels.append(patch_mask)
+                        elif current_action_type == "write":
+                            pass
 
                 templated_conv = tokenizer.apply_chat_template(
                     conversation=[conv],
